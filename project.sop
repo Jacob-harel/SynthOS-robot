@@ -1,0 +1,59 @@
+#
+# Project:       Arduino (DFRobot rover v2) robot
+# Author:        Igor Serikov
+# Date:          07-29-2014
+#
+# Description:   SynthOS project file
+#
+# Copyright (c) 2014 Zeidman Technologies, Inc.
+# 15565 Swiss Creek Lane, Cupertino California, 95014 
+# All Rights Reserved
+#
+# Zeidman Technologies gives an unlimited, nonexclusive license to
+# use this code  as long as this header comment section is kept
+# intact in all distributions and all future versions of this file
+# and the routines within it.
+#
+
+[project]
+compiler_directives=-D __AVR_ATmega328P__ -D F_CPU=16000000UL -I avr-include -I avr-gcc-include
+
+[source]
+file = robot.c
+file = util.c
+file = temp.1.c
+file = uart.c
+file = synthos-support.c
+file = print.c
+file = timer.c
+file = hardware.c
+
+[interrupt_global]
+enable    = ON
+getMask   = get_mask
+setMask   = set_mask
+enableAll = enable_ints
+
+[task]
+entry = robot
+type = loop
+
+[task]
+entry = left_motor
+type = loop
+
+[task]
+entry = right_motor
+type = loop
+
+[task]
+entry = drive_pan
+type = call
+
+[task]
+entry = print
+type = call
+
+[task]
+entry = ultrasonic_measure
+type = call

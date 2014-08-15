@@ -1,0 +1,36 @@
+/**
+ * @addtogroup    DFRobot
+ * @{
+ * @file
+ * @author        Igor Serikov
+ * @date          07-29-2014
+ *
+ * @brief         Some estimates
+ *
+ * @copyright
+ * Copyright (c) 2014 Zeidman Technologies, Inc.
+ * 15565 Swiss Creek Lane, Cupertino California, 95014 
+ * All Rights Reserved
+ *
+ * @copyright
+ * Zeidman Technologies gives an unlimited, nonexclusive license to
+ * use this code  as long as this header comment section is kept
+ * intact in all distributions and all future versions of this file
+ * and the routines within it.
+ */
+scale = 3;
+scan_time_good = 4.3 * 2;
+scan_time_bad  = 6.7 * 2;
+wheel_radius = 0.017;
+sector_time = 28 * 10 / 1000;
+pi = a (1) * 4;
+speed = wheel_radius * 2 * pi / (sector_time * 16);
+print "speed = ", speed, "\n";
+scan_start = 600;
+scan_end = 1800;
+scan_cat = 800;
+scan_reduction = (scan_end - scan_cat) / (scan_end - scan_start);
+print "scan_reduction = ", scan_reduction, "\n";
+print "distance per reduced scan good = ", scan_time_good * scan_reduction * speed, "\n";
+print "distance per reduced scan bad = ", scan_time_bad * scan_reduction * speed, "\n";
+quit;
