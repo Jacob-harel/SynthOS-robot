@@ -22,16 +22,22 @@
 #include "print.h"
 #include "timer.h"
 #include "hardware.h"
+#include "util.h"
 #include "motors.h"
 
 typedef enum {
-    pan_start               =  600, /* pan pulse time in us */
-    pan_stop                = 1800, /* pan pulse time in us */
-    pan_step                =   15, /* pan pulse time in us */
-    pan_reset_pulses        =   25,
-    min_distance            =   30, /* in cm */
-    incremental_pan_pulses  =    2,
-    turn_step_count         =    6  /* in wheel sectors */
+    pan_start                    =  600, /* pan pulse time in us */
+    pan_stop                     = 1800, /* pan pulse time in us */
+    pan_step                     =   15, /* pan pulse time in us */
+    pan_reset_pulses             =   25,
+#ifdef MIN_DISTANCE
+    min_distance                 =   MIN_DISTANCE, /* in cm */
+#else
+    min_distance                 =   30, /* in cm */
+#endif
+    incremental_pan_pulses       =    2,
+    turn_step_count              =    5, /* in wheel sectors */
+    calibration_trigger_distance =    8  /* in cm */
 } values_type;
 
 unsigned robot_timer;
@@ -73,11 +79,20 @@ void drive_pan (unsigned duration, unsigned count) {
  */
 void robot () {
     int dir;
-    unsigned pos, val;
+    unsigned pos, val, min;
+
+    /* To calibrate the center position, put your hand in front of the
+     * sensor (not further away than calibration_trigger_distance) and turn the power.
+     */
+    val = SynthOS_call (ultrasonic_measure ());
+    if (val <= calibration_trigger_distance) {
+        SynthOS_call (drive_pan (pan_stop, pan_reset_pulses));
+        SynthOS_call (drive_pan (pan_start, pan_reset_pulses));
+        SynthOS_call (drive_pan ((pan_start + pan_stop) / 2, pan_reset_pulses));
+        do_power_down ("Calibration\n");
+    }
 
     SynthOS_call (drive_pan (pan_start, pan_reset_pulses));
-
-    motors_forward ();
 
     pos = pan_start;
     dir = pan_step;
@@ -85,6 +100,10 @@ void robot () {
         SynthOS_call (drive_pan (pos, incremental_pan_pulses));
         for (;;) {
             val = SynthOS_call (ultrasonic_measure ());
+            if (pos <= 800 || pos >= 1600)
+                min = min_distance * 14 / 10;
+            else
+                min = min_distance;
             if (val >= min_distance)
                 break;
             /* We detected an object that is close than "min_distance" */
@@ -103,7 +122,7 @@ void robot () {
                 /* We made a full turn while scanning surroundings after a stop and found no
                    object that are close to us so we can resume moving forward. */
                 print0 ("robot: forward\n");
-                motors_action = motors_action_forward; 
+                motors_forward ();
             }
         } else 
             if (pos <= pan_start)

@@ -26,6 +26,7 @@
 #include "timer.h"
 #include "print.h"
 #include "motors.h"
+#include "util.h"
 
 /* 
  * We need to apply a higher torque when turn
@@ -35,15 +36,16 @@
  */
 typedef enum {
     encoders_middle            = 840, /* Analog readout middle value */
-    margin                     =   5, /* Uncertainty radius around the middle encoder value */
-    low_speed_normal           =  85, /* in a part of 255 */
+    margin                     =  10, /* Uncertainty radius around the middle encoder value */
+    low_speed_normal           =  80, /* in a part of 255 */
     high_speed_normal          = 100, /* in a part of 255 */
     low_speed_turn             = 120, /* in a part of 255 */
-    high_speed_turn            = 135, /* in a part of 255 */
-    time_top                   =  33, /* in ticks */
-    time_bottom                =  23, /* in ticks */
+    high_speed_turn            = 140, /* in a part of 255 */
+    time_top                   =  34, /* in ticks */
+    time_bottom                =  22, /* in ticks */
     sector_maximum_delay       = 300, /* in ticks */
-    acceleration_count         =   4, /* in wheel sectors */
+    acceleration_count         =   2, /* in wheel sectors */
+    initial_acceleration_count =   8, /* in wheel sectors */
 } motors_values_type;
 
 /**
@@ -101,10 +103,8 @@ void motors_backward (void) {
  * @param  p  starting position
  * @return  middle value
  */
-static unsigned get_middle (unsigned a [4], unsigned p) {
-    unsigned v1 = a [(p + 1) & 3] - a [ p      & 3];
-    unsigned v2 = a [(p + 2) & 3] - a [(p + 1) & 3];
-    unsigned v3 = a [(p + 3) & 3] - a [(p + 2) & 3];
+static unsigned get_middle (unsigned a [3], unsigned p) {
+    unsigned v1 = a [p], v2 = a [(p + 1) % 3], v3 = a [(p + 2) % 3];
     if (v1 <= v2) {
         if (v2 <= v3)
             return v2; /* v1 <= v2 <= v3 */
@@ -132,6 +132,21 @@ static int qualify (unsigned v) {
     return  0;
 }
 
+/**
+ * @brief Interval normalization
+ *
+ * In the encoder wheel, openings and bridges are
+ * not equal in angle. This function pefrorm the
+ * necessary timing normalization.
+ * @param  t  timing
+ * @return  q  opening/bridge indicator 
+ *          (-1/1, we did not check what corresponds to what)
+ * @return  normalized value
+ */
+static unsigned normalize (unsigned t, int q) {
+    return q > 0 ? t * 5 / 4 : t * 5 / 6;
+}
+
 /* Everything below the cut line would be duplicated with "left" <-> "right"
    substitution. */
 /* --- cut --- */
@@ -151,10 +166,10 @@ motors_action_t left_action;
  * accelerate/decelerate before making another decision about the speed.
  */
 void left_motor () {
-    unsigned index, mark, acc_start, acc_count, speed, middle, high_speed;
+    unsigned index, mark, acc_start, acc_count, speed, middle, high_speed, last_clock;
     int value, new_value;
-    unsigned clocks [4]; /* circular buffer containing last 4 time
-                            stamps from the encoder (addressed by "index") */
+    unsigned clocks [3]; /* circular buffer containing last 3 encoder readings
+                            (addressed by "index") */
 
  stop_motor:
     left_motor_disable ();
@@ -210,15 +225,12 @@ void left_motor () {
             do_power_down ("motors: left failed 1\n");
     }
 
-    /* Getting 4 reading */
-    index = 0;
-    for (;;) {
-        clocks [index] = clock;
-        value = new_value;
-        index ++;
-        motors_left_count ++;
-        if (index >= 4)
-            break;
+    motors_left_count ++;
+
+    last_clock = clock;
+
+    /* Getting 3 values */
+    for (index = 0; index < 3; index ++) {
         mark = clock;
         for (;;) {
             motors_left_timer = clock;
@@ -231,13 +243,17 @@ void left_motor () {
             if (clock - mark >= sector_maximum_delay)
                 do_power_down ("motors: left failed 2\n");
         }
+        clocks [index] = normalize (clock - last_clock, new_value);
+        last_clock = clock;
+        value = new_value;
+        motors_left_count ++;
     }
 
     /* Main loop */
     index = 0;
     acc_start = motors_left_count;
     /* No more adjustments until get this number of readings */
-    acc_count = acceleration_count;
+    acc_count = initial_acceleration_count;
     for (;;) {
         if (acc_count != 0 && motors_left_count - acc_start >= acc_count)
             acc_count = 0;
@@ -278,9 +294,10 @@ void left_motor () {
             if (clock - mark >= sector_maximum_delay)
                 do_power_down ("motors: left failed 3\n");
         }
-        clocks [index] = clock;
+        clocks [index] = normalize (clock - last_clock, new_value);
+        last_clock = clock;
         value = new_value;
-        index = (index + 1) & 3;
+        index = (index + 1) % 3;
         motors_left_count ++;
     }
 }
