@@ -104,7 +104,7 @@ void robot () {
                 min = min_distance * 14 / 10;
             else
                 min = min_distance;
-            if (val >= min_distance)
+            if (val >= min)
                 break;
             /* We detected an object that is close than "min_distance" */
             print1 ("robot: left, got %u\n", val);
